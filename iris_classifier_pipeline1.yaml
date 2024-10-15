@@ -1,0 +1,62 @@
+# PIPELINE DEFINITION
+# Name: iris-classifier-demo-pipeline
+# Description: A sample KFP v2 pipeline
+# Inputs:
+#    data_path: str
+components:
+  comp-prepare-data:
+    executorLabel: exec-prepare-data
+deploymentSpec:
+  executors:
+    exec-prepare-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - prepare_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.9.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'pandas==1.2.4'\
+          \ 'numpy==1.21.0' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef prepare_data():\n    print(\"---- Inside prepare_data component\
+          \ ----\")\n    # Load dataset\n    df = pd.read_csv(\"https://raw.githubusercontent.com/TripathiAshutosh/dataset/main/iris.csv\"\
+          )\n    df = df.dropna()\n    df.to_csv(f'data/final_df.csv', index=False)\n\
+          \    print(\"\\n ---- data csv is saved to PV location /data/final_df.csv\
+          \ ----\")\n\n"
+        image: python:3.7
+pipelineInfo:
+  description: A sample KFP v2 pipeline
+  name: iris-classifier-demo-pipeline
+root:
+  dag:
+    tasks:
+      prepare-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-prepare-data
+        taskInfo:
+          name: prepare-data
+  inputDefinitions:
+    parameters:
+      data_path:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.9.0
